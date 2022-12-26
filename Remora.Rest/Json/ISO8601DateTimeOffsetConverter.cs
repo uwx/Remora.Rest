@@ -23,12 +23,14 @@
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using JetBrains.Annotations;
 
 namespace Remora.Rest.Json;
 
 /// <summary>
 /// Converts instances of the <see cref="DateTimeOffset"/> struct to and from an ISO8601 representation in JSON.
 /// </summary>
+[PublicAPI]
 public class ISO8601DateTimeOffsetConverter : JsonConverter<DateTimeOffset>
 {
     /// <inheritdoc />
@@ -56,6 +58,9 @@ public class ISO8601DateTimeOffsetConverter : JsonConverter<DateTimeOffset>
     public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options)
     {
         var offset = value.Offset;
-        writer.WriteStringValue(value.ToString($"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ffffff'+'{offset.Hours:D2}':'{offset.Minutes:D2}"));
+        writer.WriteStringValue
+        (
+            value.ToString($"yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'ffffff'+'{offset.Hours:D2}':'{offset.Minutes:D2}")
+        );
     }
 }

@@ -22,6 +22,7 @@
 
 using System.Buffers;
 using System.Text.Json;
+using JetBrains.Annotations;
 
 namespace Remora.Rest.Extensions;
 
@@ -30,8 +31,10 @@ namespace Remora.Rest.Extensions;
 /// </summary>
 /// <remarks>
 /// As per the <see href="https://docs.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-how-to?pivots=dotnet-5-0#serialize-to-utf-8">docs</see>,
-/// serializing to UTF-8 is about 5-10% faster than using string-based methods. The difference is because bytes (as UTF-8) don't need to be converted to strings (UTF-16).
+/// serializing to UTF-8 is about 5-10% faster than using string-based methods. The difference is because bytes
+/// (as UTF-8) don't need to be converted to strings (UTF-16).
 /// </remarks>
+[PublicAPI]
 public static class JsonExtensions
 {
     /// <summary>
@@ -46,6 +49,7 @@ public static class JsonExtensions
         var bufferWriter = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(bufferWriter);
         element.WriteTo(writer);
+
         return JsonSerializer.Deserialize<TEntity>(bufferWriter.WrittenSpan, options);
     }
 

@@ -24,7 +24,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 
 #pragma warning disable SA1402
@@ -167,7 +166,9 @@ public readonly struct Optional<TValue> : IOptional
     /// <returns>The value of <c>this</c> or <c>default</c> if none is present.</returns>
     public TValue? OrDefault()
     {
-        return TryGet(out var value) ? value : default;
+        return TryGet(out var value)
+            ? value
+            : default;
     }
 
     /// <summary>
@@ -181,7 +182,9 @@ public readonly struct Optional<TValue> : IOptional
     [return: NotNullIfNotNull(nameof(defaultValue))]
     public TValue? OrDefault(TValue? defaultValue)
     {
-        return IsDefined(out var value) ? value : defaultValue;
+        return IsDefined(out var value)
+            ? value
+            : defaultValue;
     }
 
     /// <summary>
@@ -195,24 +198,30 @@ public readonly struct Optional<TValue> : IOptional
     // Delegate that produces an Exception only allocates in the failing case.
     public TValue OrThrow([RequireStaticDelegate] Func<Exception> func)
     {
-        return TryGet(out var value) ? value : throw func();
+        return TryGet(out var value)
+            ? value
+            : throw func();
     }
 
     /// <summary>
     /// Casts the current <see cref="Optional{TValue}"/> to a nullable <typeparamref name="TValue"/>?.
     /// </summary>
     /// <returns>
-    /// An <see cref="Optional{TValue}"/> with the type pararameter changed to <typeparamref name="TValue"/>?.
+    /// An <see cref="Optional{TValue}"/> with the type parameter changed to <typeparamref name="TValue"/>?.
     /// </returns>
     public Optional<TValue?> AsNullableOptional()
     {
-        return TryGet(out var value) ? value : default(Optional<TValue?>);
+        return TryGet(out var value)
+            ? value
+            : default(Optional<TValue?>);
     }
 
     /// <summary>
     /// Gets the underlying value of a <see cref="Optional{TValue}"/> if it has one.
     /// </summary>
-    /// <param name="value">Set to the value of <see cref="Optional{TValue}"/>, or <c>default</c> if it has none.</param>
+    /// <param name="value">
+    /// Set to the value of <see cref="Optional{TValue}"/>, or <c>default</c> if it has none.
+    /// </param>
     /// <returns><c>true</c> if the <see cref="Optional{TValue}"/> has a value, even when it's <c>null</c>.</returns>
     /// <seealso cref="IsDefined(out TValue?)"/>
     public bool TryGet([MaybeNullWhen(false)] out TValue value)
@@ -234,7 +243,7 @@ public readonly struct Optional<TValue> : IOptional
     /// <param name="mappingFunc">The mapping function.</param>
     /// <typeparam name="TResult">The value type for the output of the mapping result.</typeparam>
     /// <returns>
-    /// A new optional with the mapping result if <see cref="Optional{TValue}"/> is non-empty; an empty opitional
+    /// A new optional with the mapping result if <see cref="Optional{TValue}"/> is non-empty; an empty optional
     /// otherwise.
     /// </returns>
     public Optional<TResult> Map<TResult>(Func<TValue, TResult> mappingFunc)
