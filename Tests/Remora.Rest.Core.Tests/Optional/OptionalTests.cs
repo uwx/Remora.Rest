@@ -1,23 +1,7 @@
 //
-//  OptionalTests.cs
-//
-//  Author:
-//       Jarl Gullberg <jarl.gullberg@gmail.com>
-//
-//  Copyright (c) Jarl Gullberg
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Lesser General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Lesser General Public License for more details.
-//
-//  You should have received a copy of the GNU Lesser General Public License
-//  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//  SPDX-FileName: OptionalTests.cs
+//  SPDX-FileCopyrightText: Copyright (c) Jarl Gullberg
+//  SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
 using System;
@@ -598,7 +582,7 @@ public static class OptionalTests
         public static void ReturnsNullValueForClasses()
         {
             var a = default(Optional<object>);
-            Assert.Equal(null, a.OrDefault());
+            Assert.Null(a.OrDefault());
         }
 
         [Fact]
@@ -636,8 +620,7 @@ public static class OptionalTests
         public static void ThrowsIfDoesNotContainValue()
         {
             var a = default(Optional<int>);
-            Assert.Throws<InvalidOperationException>(()
-                => a.OrThrow(static () => new InvalidOperationException("Expected")));
+            Assert.Throws<InvalidOperationException>(() => a.OrThrow(static () => new InvalidOperationException("Expected")));
         }
 
         [Fact]
@@ -645,34 +628,61 @@ public static class OptionalTests
         {
             Optional<int> a = 1;
 
-            var exception =
-                Record.Exception(() => a.OrThrow(static () => new InvalidOperationException("Not expected")));
+            var exception = Record.Exception(() => a.OrThrow(static () => new InvalidOperationException("Not expected")));
             Assert.Null(exception);
         }
     }
 
     public static class AsNullableOptional
     {
-        [Fact]
-        public static void ProducesCorrectValueWhenEmpty()
+        public static class Struct
         {
-            var a = default(Optional<object>);
-            var result = a.AsNullableOptional();
+            [Fact]
+            public static void ProducesCorrectValueWhenEmpty()
+            {
+                var a = default(Optional<int>);
+                var result = a.AsNullableOptional();
 
-            // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
-            Assert.Equal(default(Optional<object?>), result);
-            Assert.False(result.HasValue);
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(default(Optional<int?>), result);
+                Assert.False(result.HasValue);
+            }
+
+            [Fact]
+            public static void ProducesCorrectValueWhenPresent()
+            {
+                Optional<int> a = 1;
+                var result = a.AsNullableOptional();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(new Optional<int?>(1), result);
+                Assert.True(result.HasValue);
+            }
         }
 
-        [Fact]
-        public static void ProducesCorrectValueWhenPresent()
+        public static class Class
         {
-            Optional<string> a = "Hello world";
-            var result = a.AsNullableOptional();
+            [Fact]
+            public static void ProducesCorrectValueWhenEmpty()
+            {
+                var a = default(Optional<object>);
+                var result = a.AsNullableOptional();
 
-            // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
-            Assert.Equal(new Optional<string?>("Hello world"), result);
-            Assert.True(result.HasValue);
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(default(Optional<object?>), result);
+                Assert.False(result.HasValue);
+            }
+
+            [Fact]
+            public static void ProducesCorrectValueWhenPresent()
+            {
+                Optional<string> a = "Hello world";
+                var result = a.AsNullableOptional();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(new Optional<string?>("Hello world"), result);
+                Assert.True(result.HasValue);
+            }
         }
     }
 
@@ -785,6 +795,114 @@ public static class OptionalTests
                 var result = a.ConvertNullToEmpty();
                 Assert.True(result.IsDefined(out var value));
                 Assert.Equal("Expected", value);
+            }
+        }
+    }
+
+    public static class AsOptional
+    {
+        public static class Struct
+        {
+            [Fact]
+            public static void ProducesCorrectValueWhenEmpty()
+            {
+                var a = default(int?);
+                var result = a.AsOptional();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(default(Optional<int>), result);
+                Assert.False(result.HasValue);
+            }
+
+            [Fact]
+            public static void ProducesCorrectValueWhenPresent()
+            {
+                int? a = 1;
+                var result = a.AsOptional();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(new Optional<int>(1), result);
+                Assert.True(result.HasValue);
+            }
+        }
+
+        public static class Class
+        {
+            [Fact]
+            public static void ProducesCorrectValueWhenEmpty()
+            {
+                string? a = null;
+                var result = a.AsOptional();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(default(Optional<string>), result);
+                Assert.False(result.HasValue);
+            }
+
+            [Fact]
+            public static void ProducesCorrectValueWhenPresent()
+            {
+                // ReSharper disable once SuggestVarOrType_BuiltInTypes
+                // ReSharper disable once VariableCanBeNotNullable
+                string? a = "Hello world";
+                var result = a.AsOptional();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(new Optional<string>("Hello world"), result);
+                Assert.True(result.HasValue);
+            }
+        }
+    }
+
+    public static class AsNullable
+    {
+        public static class Struct
+        {
+            [Fact]
+            public static void ProducesCorrectValueWhenEmpty()
+            {
+                var a = default(Optional<int>);
+                var result = a.AsNullable();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(default(int?), result);
+                Assert.False(result.HasValue);
+            }
+
+            [Fact]
+            public static void ProducesCorrectValueWhenPresent()
+            {
+                Optional<int> a = 1;
+                var result = a.AsNullable();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal(1, result);
+                Assert.True(result.HasValue);
+            }
+        }
+
+        public static class Class
+        {
+            [Fact]
+            public static void ProducesCorrectValueWhenEmpty()
+            {
+                var a = default(Optional<string>);
+                var result = a.AsNullable();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Null(result);
+            }
+
+            [Fact]
+            public static void ProducesCorrectValueWhenPresent()
+            {
+                // ReSharper disable once SuggestVarOrType_BuiltInTypes
+                // ReSharper disable once VariableCanBeNotNullable
+                Optional<string> a = "Hello world";
+                var result = a.AsNullable();
+
+                // ReSharper disable once ArrangeDefaultValueWhenTypeNotEvident
+                Assert.Equal("Hello world", result);
             }
         }
     }
