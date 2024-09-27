@@ -259,7 +259,7 @@ public class DataObjectConverterGenerator : IIncrementalGenerator
                     
                     """
                 );
-                spc.AddSource("Remora.Rest.SourceGenerator.DataObjectConverterGenerator.Generated.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
+                spc.AddSource($"Remora.Rest.SourceGenerator.DataObjectConverterGenerator/{data.FilePath.GetHashCode()}.{data.Line}.{data.Column}.Generated.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
             });
     }
 

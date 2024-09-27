@@ -50,6 +50,7 @@ internal delegate object InstancePropertyGetter(object instance);
 /// <param name="options">The JSON serializer options.</param>
 internal delegate void DTOPropertyWriter(Utf8JsonWriter writer, DTOPropertyInfo dtoProperty, object instance, JsonSerializerOptions options);
 
+
 internal delegate object? DTOPropertyReader(ref Utf8JsonReader reader, DTOPropertyInfo dtoProperty, JsonSerializerOptions options);
 
 /// <summary>

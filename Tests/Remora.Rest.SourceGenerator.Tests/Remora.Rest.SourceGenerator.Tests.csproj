@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="FluentAssertions" />
+      <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\Remora.Rest.SourceGenerator\Remora.Rest.SourceGenerator.csproj" />
+      <ProjectReference Include="..\..\Remora.Rest\Remora.Rest.csproj" />
+    </ItemGroup>
+
+</Project>
