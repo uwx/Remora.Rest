@@ -24,7 +24,7 @@ public static class JsonSerializerOptionsExtensions
     /// <typeparam name="TInterface">The interface type.</typeparam>
     /// <typeparam name="TActual">The actual type.</typeparam>
     /// <returns>The added converter.</returns>
-    public static DataObjectConverter<TInterface, TActual> AddDataObjectConverter<TInterface, TActual>
+    public static IDataObjectConverterConfiguration<TInterface, TActual> AddDataObjectConverter<TInterface, TActual>
     (
         this JsonSerializerOptions options
     ) where TActual : TInterface

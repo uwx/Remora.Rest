@@ -8,6 +8,7 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Remora.Rest.Core;
 using Remora.Rest.Extensions;
 using Remora.Rest.Json.Internal;
@@ -46,7 +47,10 @@ internal delegate object InstancePropertyGetter(object instance);
 /// <param name="writer">The JSON writer to write to.</param>
 /// <param name="dtoProperty">The DTO property this writer is for.</param>
 /// <param name="instance">The instance to read the property value from.</param>
-internal delegate void DTOPropertyWriter(Utf8JsonWriter writer, DTOPropertyInfo dtoProperty, object instance);
+/// <param name="options">The JSON serializer options.</param>
+internal delegate void DTOPropertyWriter(Utf8JsonWriter writer, DTOPropertyInfo dtoProperty, object instance, JsonSerializerOptions options);
+
+internal delegate object? DTOPropertyReader(ref Utf8JsonReader reader, DTOPropertyInfo dtoProperty, JsonSerializerOptions options);
 
 /// <summary>
 /// Handles application-specific creation of delegates for performing reflective operations using Linq Expressions as a
@@ -140,6 +144,7 @@ internal static class ExpressionFactoryUtilities
         var writer = Expression.Parameter(typeof(Utf8JsonWriter), "writer");
         var dtoProperty = Expression.Parameter(typeof(DTOPropertyInfo), "dtoProperty");
         var instance = Expression.Parameter(typeof(object), "instance");
+        var options = Expression.Parameter(typeof(JsonSerializerOptions), "options");
 
         return Expression.Lambda<DTOPropertyWriter>
         (
@@ -152,9 +157,46 @@ internal static class ExpressionFactoryUtilities
             ),
             writer,
             dtoProperty,
-            instance
+            instance,
+            options
         ).Compile();
     }
+
+    private static readonly MethodInfo ReadPropertyMethod = typeof(ExpressionFactoryUtilities)
+        .GetMethod(nameof(ReadProperty), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    public static DTOPropertyReader CreatePropertyReader(Type propertyType)
+    {
+        var writer = Expression.Parameter(typeof(Utf8JsonReader).MakeByRefType(), "writer");
+        var dtoProperty = Expression.Parameter(typeof(DTOPropertyInfo), "dtoProperty");
+        var options = Expression.Parameter(typeof(JsonSerializerOptions), "options");
+
+        return Expression.Lambda<DTOPropertyReader>
+        (
+            Expression.Call
+            (
+                ReadPropertyMethod.MakeGenericMethod(propertyType),
+                writer,
+                dtoProperty,
+                options
+            ),
+            writer,
+            dtoProperty,
+            options
+        ).Compile();
+    }
+
+    private static T? ReadProperty<T>(ref Utf8JsonReader reader, DTOPropertyInfo dtoProperty, JsonSerializerOptions options)
+    {
+        var propertyType = dtoProperty.Property.PropertyType;
+        return ((JsonConverter<T>)(dtoProperty.Converter ?? options.GetConverter(propertyType))).Read(ref reader, propertyType, options);
+    }
+
+    private static readonly MethodInfo WriteOptionalPropertyMethod = typeof(ExpressionFactoryUtilities)
+        .GetMethod(nameof(WriteOptionalProperty), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo WriteRequiredPropertyMethod = typeof(ExpressionFactoryUtilities)
+        .GetMethod(nameof(WriteRequiredProperty), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     /// <summary>
     /// Gets the correct method that can write a property of type <paramref name="valueType"/> to JSON.
@@ -163,18 +205,12 @@ internal static class ExpressionFactoryUtilities
     /// <returns>The correct method info.</returns>
     private static MethodInfo GetWritePropertyMethod(Type valueType)
     {
-        var flags = BindingFlags.NonPublic | BindingFlags.Static;
-
         if (valueType.IsOptional())
         {
-            return typeof(ExpressionFactoryUtilities)
-                .GetMethod(nameof(WriteOptionalProperty), flags)!
-                .MakeGenericMethod(valueType.GetGenericArguments());
+            return WriteOptionalPropertyMethod.MakeGenericMethod(valueType.GetGenericArguments());
         }
 
-        return typeof(ExpressionFactoryUtilities)
-            .GetMethod(nameof(WriteRequiredProperty), flags)!
-            .MakeGenericMethod(valueType);
+        return WriteRequiredPropertyMethod.MakeGenericMethod(valueType);
     }
 
     /// <summary>
@@ -188,12 +224,13 @@ internal static class ExpressionFactoryUtilities
     (
         Utf8JsonWriter writer,
         DTOPropertyInfo dtoProperty,
-        Optional<T> value
+        Optional<T> value,
+        JsonSerializerOptions options
     )
     {
         if (value.HasValue)
         {
-            WriteRequiredProperty(writer, dtoProperty, value.Value);
+            WriteRequiredProperty(writer, dtoProperty, value.Value, options);
         }
     }
 
@@ -208,10 +245,11 @@ internal static class ExpressionFactoryUtilities
     (
         Utf8JsonWriter writer,
         DTOPropertyInfo dtoProperty,
-        T value
+        T value,
+        JsonSerializerOptions options
     )
     {
         writer.WritePropertyName(dtoProperty.WriteName);
-        JsonSerializer.Serialize(writer, value, dtoProperty.Options);
+        ((JsonConverter<T>)(dtoProperty.Converter ?? options.GetConverter(typeof(T)))).Write(writer, value, options);
     }
 }

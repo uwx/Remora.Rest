@@ -26,16 +26,16 @@ namespace Remora.Rest.Json;
 /// <typeparam name="TInterface">The interface that is seen in the objects.</typeparam>
 /// <typeparam name="TImplementation">The concrete implementation.</typeparam>
 [PublicAPI]
-public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFactory
-    where TImplementation : TInterface
+public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFactory, IDataObjectConverterConfiguration<TInterface, TImplementation> where TImplementation : TInterface
 {
     // Stores the initialization info.
     private readonly IInitializationInfo _dtoInitialization;
 
     private readonly IReadOnlyList<PropertyInfo> _dtoProperties;
 
-    // JSON writers for all properties in the DTO
+    // JSON readers/writers for all properties in the DTO
     private readonly IReadOnlyDictionary<PropertyInfo, DTOPropertyWriter> _dtoPropertyWriters;
+    private readonly IReadOnlyDictionary<PropertyInfo, DTOPropertyReader> _dtoPropertyReaders;
 
     // Empty optionals for all properties of type Optional<T> (for polyfilling default values)
     private readonly IReadOnlyDictionary<Type, object?> _dtoEmptyOptionals;
@@ -92,6 +92,13 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
             (
                 p => p,
                 p => CreatePropertyWriter(p, interfaceMap)
+            );
+
+        _dtoPropertyReaders = _dtoProperties
+            .ToDictionary
+            (
+                p => p,
+                p => ExpressionFactoryUtilities.CreatePropertyReader(p.PropertyType)
             );
 
         _dtoEmptyOptionals = _dtoProperties
@@ -208,7 +215,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// </summary>
     /// <param name="allowExtraProperties">Whether to allow extra properties.</param>
     /// <returns>The converter, with the new setting.</returns>
-    public DataObjectConverter<TInterface, TImplementation> AllowExtraProperties(bool allowExtraProperties = true)
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> AllowExtraProperties(bool allowExtraProperties = true)
     {
         _allowExtraProperties = allowExtraProperties;
         return this;
@@ -221,7 +228,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="propertyExpression">The property expression.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the inclusion.</returns>
-    public DataObjectConverter<TInterface, TImplementation> IncludeWhenSerializing<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> IncludeWhenSerializing<TProperty>
     (
         Expression<Func<TImplementation, TProperty>> propertyExpression
     )
@@ -240,11 +247,6 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
         if (!_dtoProperties.Contains(property))
         {
             throw new InvalidOperationException();
-        }
-
-        if (_includeReadOnlyOverrides.Contains(property))
-        {
-            return this;
         }
 
         _includeReadOnlyOverrides.Add(property);
@@ -258,7 +260,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="propertyExpression">The property expression.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the inclusion.</returns>
-    public DataObjectConverter<TInterface, TImplementation> ExcludeWhenSerializing<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> ExcludeWhenSerializing<TProperty>
     (
         Expression<Func<TImplementation, TProperty>> propertyExpression
     )
@@ -279,11 +281,6 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
             throw new InvalidOperationException();
         }
 
-        if (_excludeOverrides.Contains(property))
-        {
-            return this;
-        }
-
         _excludeOverrides.Add(property);
         return this;
     }
@@ -295,7 +292,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="name">The new name.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyName<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyName<TProperty>
     (
         Expression<Func<TImplementation, TProperty>> propertyExpression,
         string name
@@ -320,8 +317,8 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
         // Resolve the matching interface property
         property = _dtoProperties.First(p => p.Name == property.Name);
 
-        _writeNameOverrides.Add(property, name );
-        _readNameOverrides.Add(property, new[] { name });
+        _writeNameOverrides.Add(property, name);
+        _readNameOverrides.Add(property, [name]);
         return this;
     }
 
@@ -332,7 +329,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="name">The new name.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithWritePropertyName<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithWritePropertyName<TProperty>
     (
         Expression<Func<TImplementation, TProperty>> propertyExpression,
         string name
@@ -369,7 +366,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="fallbacks">The fallback names to use if the primary name isn't present.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithReadPropertyName<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithReadPropertyName<TProperty>
     (
         Expression<Func<TImplementation, TProperty>> propertyExpression,
         string name,
@@ -395,10 +392,10 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
         // Resolve the matching interface property
         property = _dtoProperties.First(p => p.Name == property.Name);
 
-        var overrides =
+        string[] overrides =
             fallbacks.Length == 0
-                ? new[] { name }
-                : new[] { name }.Concat(fallbacks).ToArray();
+                ? [name]
+                : [name, ..fallbacks];
 
         _readNameOverrides.Add(property, overrides);
 
@@ -412,7 +409,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="converter">The JSON converter.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyConverter<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyConverter<TProperty>
     (
         Expression<Func<TImplementation, TProperty>> propertyExpression,
         JsonConverter<TProperty> converter
@@ -425,7 +422,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="converter">The JSON converter.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyConverter<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyConverter<TProperty>
     (
         Expression<Func<TImplementation, Optional<TProperty>>> propertyExpression,
         JsonConverter<TProperty> converter
@@ -438,7 +435,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="converter">The JSON converter.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyConverter<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyConverter<TProperty>
     (
         Expression<Func<TImplementation, TProperty?>> propertyExpression,
         JsonConverter<TProperty> converter
@@ -453,7 +450,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="converter">The JSON converter.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyConverter<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyConverter<TProperty>
     (
         Expression<Func<TImplementation, Optional<TProperty?>>> propertyExpression,
         JsonConverter<TProperty> converter
@@ -469,7 +466,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <typeparam name="TEnumerable">The enumerable type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyConverter<TProperty, TEnumerable>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyConverter<TProperty, TEnumerable>
     (
         Expression<Func<TImplementation, TEnumerable>> propertyExpression,
         JsonConverter<TProperty> converter
@@ -486,7 +483,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <typeparam name="TEnumerable">The enumerable type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyConverter<TProperty, TEnumerable>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyConverter<TProperty, TEnumerable>
     (
         Expression<Func<TImplementation, Optional<TEnumerable>>> propertyExpression,
         JsonConverter<TProperty> converter
@@ -502,7 +499,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     /// <param name="converterFactory">The JSON converter factory.</param>
     /// <typeparam name="TProperty">The property type.</typeparam>
     /// <returns>The converter, with the property name.</returns>
-    public DataObjectConverter<TInterface, TImplementation> WithPropertyConverter<TProperty>
+    public IDataObjectConverterConfiguration<TInterface, TImplementation> WithPropertyConverter<TProperty>
     (
         Expression<Func<TImplementation, TProperty>> propertyExpression,
         JsonConverterFactory converterFactory
@@ -539,9 +536,9 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
             }
 
             var converter = GetConverter(property, options);
-            var propertyOptions = converter == null ? options : CreatePropertyConverterOptions(options, converter);
             var readNames = GetReadJsonPropertyName(property, options);
             var writeNames = GetWriteJsonPropertyName(property, options);
+            var reader = GetPropertyReader(property);
             var writer = GetPropertyWriter(property);
 
             // We cache this as well since the check is somewhat complex
@@ -552,10 +549,11 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
                 property,
                 readNames,
                 writeNames,
+                reader,
                 writer,
                 allowsNull,
                 defaultValue,
-                propertyOptions,
+                converter,
                 readProperties.Count
             );
 
@@ -623,7 +621,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     {
         return _readNameOverrides.TryGetValue(dtoProperty, out var overriddenName)
             ? overriddenName
-            : new[] { options.PropertyNamingPolicy?.ConvertName(dtoProperty.Name) ?? dtoProperty.Name };
+            : [options.PropertyNamingPolicy?.ConvertName(dtoProperty.Name) ?? dtoProperty.Name];
     }
 
     /// <summary>
@@ -693,7 +691,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     {
         // If there is an explicit default parameter, we use that.
         object? defaultValue;
-        if (parameter != null && parameter.HasDefaultValue)
+        if (parameter is { HasDefaultValue: true })
         {
             defaultValue = parameter.DefaultValue;
             if (propertyType.IsValueType && defaultValue is null)
@@ -735,6 +733,16 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
     private DTOPropertyWriter GetPropertyWriter(PropertyInfo property)
     {
         return _dtoPropertyWriters[property];
+    }
+
+    /// <summary>
+    /// Gets a delegate that can read the <paramref name="property"/> from JSON.
+    /// </summary>
+    /// <param name="property">The property.</param>
+    /// <returns>A <see cref="DTOPropertyReader"/> for the specified property.</returns>
+    private DTOPropertyReader GetPropertyReader(PropertyInfo property)
+    {
+        return _dtoPropertyReaders[property];
     }
 
     private DataObjectConverter<TInterface, TImplementation> AddPropertyConverter<TExpression>
@@ -799,26 +807,18 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
         var parameterTypeCounts = new Dictionary<Type, int>();
         foreach (var parameterType in constructor.GetParameters().Select(p => p.ParameterType))
         {
-            if (parameterTypeCounts.ContainsKey(parameterType))
+            if (!parameterTypeCounts.TryAdd(parameterType, 1))
             {
                 parameterTypeCounts[parameterType] += 1;
-            }
-            else
-            {
-                parameterTypeCounts.Add(parameterType, 1);
             }
         }
 
         var propertyTypeCounts = new Dictionary<Type, int>();
         foreach (var propertyType in visiblePropertyTypes)
         {
-            if (propertyTypeCounts.ContainsKey(propertyType))
+            if (!propertyTypeCounts.TryAdd(propertyType, 1))
             {
                 propertyTypeCounts[propertyType] += 1;
-            }
-            else
-            {
-                propertyTypeCounts.Add(propertyType, 1);
             }
         }
 

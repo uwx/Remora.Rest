@@ -119,12 +119,7 @@ internal sealed class BoundDataObjectConverter<T> : JsonConverter<T>
                 continue;
             }
 
-            var propertyValue = JsonSerializer.Deserialize
-            (
-                ref reader,
-                dtoProperty.Property.PropertyType,
-                dtoProperty.Options
-            );
+            var propertyValue = dtoProperty.Reader(ref reader, dtoProperty, options);
 
             // Verify nullability
             if (propertyValue is null && !dtoProperty.AllowsNull)
@@ -187,7 +182,7 @@ internal sealed class BoundDataObjectConverter<T> : JsonConverter<T>
 
         foreach (var dtoProperty in _writeProperties)
         {
-            dtoProperty.Writer(writer, dtoProperty, value);
+            dtoProperty.Writer(writer, dtoProperty, value, options);
         }
 
         writer.WriteEndObject();
@@ -195,6 +190,6 @@ internal sealed class BoundDataObjectConverter<T> : JsonConverter<T>
 
     private (bool IsPrimaryChoice, DTOPropertyInfo? DTOProperty) GetReadPropertyInfo(string name)
     {
-        return _readPropertiesByName.TryGetValue(name, out var v) ? v : default;
+        return _readPropertiesByName.GetValueOrDefault(name);
     }
 }
