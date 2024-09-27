@@ -546,7 +546,7 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
 
             var data = new DTOPropertyInfo
             (
-                property,
+                property.Name,
                 readNames,
                 writeNames,
                 reader,
@@ -597,18 +597,6 @@ public class DataObjectConverter<TInterface, TImplementation> : JsonConverterFac
         }
 
         throw new ArgumentException("This converter cannot convert the provided type.", nameof(typeToConvert));
-    }
-
-    private static JsonSerializerOptions CreatePropertyConverterOptions
-    (
-        JsonSerializerOptions options,
-        JsonConverter converter
-    )
-    {
-        var cloned = new JsonSerializerOptions(options);
-        cloned.Converters.Insert(0, converter);
-
-        return cloned;
     }
 
     /// <summary>

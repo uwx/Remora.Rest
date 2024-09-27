@@ -124,7 +124,7 @@ internal sealed class BoundDataObjectConverter<T> : JsonConverter<T>
             // Verify nullability
             if (propertyValue is null && !dtoProperty.AllowsNull)
             {
-                throw new JsonException($"null is not a valid value for DTO property \"{dtoProperty.Property.Name}\".");
+                throw new JsonException($"null is not a valid value for DTO property \"{dtoProperty.PropertyName}\".");
             }
 
             var index = dtoProperty.ReadIndex;
@@ -156,7 +156,7 @@ internal sealed class BoundDataObjectConverter<T> : JsonConverter<T>
             {
                 throw new JsonException
                 (
-                    $"The data property \"{dtoProperty.Property.Name}\" did not have a corresponding value in the JSON."
+                    $"The data property \"{dtoProperty.PropertyName}\" did not have a corresponding value in the JSON."
                 );
             }
         }

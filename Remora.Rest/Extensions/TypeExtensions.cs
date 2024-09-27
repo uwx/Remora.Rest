@@ -271,7 +271,7 @@ public static class TypeExtensions
             yield break;
         }
 
-        foreach (var implementedInterface in type.GetInterfaces().Concat(new[] { type }))
+        foreach (var implementedInterface in type.GetInterfaces().Append(type))
         {
             foreach (var property in implementedInterface.GetProperties())
             {

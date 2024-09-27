@@ -188,8 +188,7 @@ internal static class ExpressionFactoryUtilities
 
     private static T? ReadProperty<T>(ref Utf8JsonReader reader, DTOPropertyInfo dtoProperty, JsonSerializerOptions options)
     {
-        var propertyType = dtoProperty.Property.PropertyType;
-        return ((JsonConverter<T>)(dtoProperty.Converter ?? options.GetConverter(propertyType))).Read(ref reader, propertyType, options);
+        return ((JsonConverter<T>)(dtoProperty.Converter ?? options.GetConverter(typeof(T)))).Read(ref reader, typeof(T), options);
     }
 
     private static readonly MethodInfo WriteOptionalPropertyMethod = typeof(ExpressionFactoryUtilities)

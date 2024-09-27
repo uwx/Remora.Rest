@@ -16,7 +16,7 @@ namespace Remora.Rest.Json.Internal;
 /// <summary>
 /// Bundles data needed for properties in <see cref="BoundDataObjectConverter{T}"/>.
 /// </summary>
-/// <param name="Property">The CLR property of the implementation type.</param>
+/// <param name="PropertyName">The name of the CLR property of the implementation type.</param>
 /// <param name="ReadNames">The names this property allows when reading.</param>
 /// <param name="WriteName">The name used when writing this property.</param>
 /// <param name="Reader">A delegate that reads the property.</param>
@@ -29,7 +29,7 @@ namespace Remora.Rest.Json.Internal;
 /// </param>
 internal sealed record DTOPropertyInfo
 (
-    PropertyInfo Property,
+    string PropertyName,
     string[] ReadNames,
     string WriteName,
     DTOPropertyReader Reader,

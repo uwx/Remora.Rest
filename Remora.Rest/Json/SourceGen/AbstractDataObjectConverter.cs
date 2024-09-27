@@ -6,33 +6,43 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Remora.Rest.Core;
+using Remora.Rest.Json.Internal;
 using Remora.Rest.Json.Reflection;
 
 namespace Remora.Rest.Json;
 
-internal record CompileTimePropertyInfo(
+internal readonly record struct CompileTimePropertyKey(
     string Name,
     Type? DeclaringType
 )
 {
-    public static CompileTimePropertyInfo GetForReflectedProperty(PropertyInfo property)
+    public static CompileTimePropertyKey GetForReflectedProperty(PropertyInfo property)
         => new(property.Name, property.DeclaringType);
 }
 
-internal record CompileTimePropertyInfo2(
+// UnwrappedPropertyType: if nullable<T> or optional<T>, get T. see special case for enum.
+internal readonly record struct CompileTimePropertyInfo(
     string Name,
+    Type PropertyType,
+    Type UnwrappedPropertyType,
     Type? DeclaringType,
-    Action<object, object> SetValue,
-    Func<object, object> GetValue,
+    Func<object, object?> GetValue,
     DTOPropertyWriter Writer,
-    DTOPropertyReader Reader
-) : CompileTimePropertyInfo(Name, DeclaringType), IEquatable<CompileTimePropertyInfo>;
+    DTOPropertyReader Reader,
+    bool AllowsNull, // see PropertyInfoExtensions.AllowsNull
+    bool CanWrite,
+    Optional<object?> DefaultValue = default // for construcotr invocation. see GetDefaultValueForParameter
+)
+{
+    public static implicit operator CompileTimePropertyKey(CompileTimePropertyInfo property) => new(property.Name, property.PropertyType);
+}
 
 public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
     JsonConverterFactory,
@@ -41,17 +51,19 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
 {
     private protected abstract ObjectFactory<TImplementation> Factory { get; }
 
-    private protected abstract IReadOnlyList<CompileTimePropertyInfo2> DtoProperties { get; }
+    // this can be cached, but there is not much of an impulse for it
+    private ObjectFactory<TInterface> InterfaceFactory => args => Factory(args);
 
-    private protected abstract IReadOnlyDictionary<Type, object?> DtoEmptyOptionals { get; }
+    // MUST be sorted in constructor invocation order!
+    private protected abstract IReadOnlyList<CompileTimePropertyInfo> DtoProperties { get; }
 
-    private readonly Dictionary<CompileTimePropertyInfo, string[]> _readNameOverrides = new();
-    private readonly Dictionary<CompileTimePropertyInfo, string> _writeNameOverrides = new();
-    private readonly HashSet<CompileTimePropertyInfo> _includeReadOnlyOverrides = new();
-    private readonly HashSet<CompileTimePropertyInfo> _excludeOverrides = new();
+    private readonly Dictionary<CompileTimePropertyKey, string[]> _readNameOverrides = new();
+    private readonly Dictionary<CompileTimePropertyKey, string> _writeNameOverrides = new();
+    private readonly HashSet<CompileTimePropertyKey> _includeReadOnlyOverrides = new();
+    private readonly HashSet<CompileTimePropertyKey> _excludeOverrides = new();
 
-    private readonly Dictionary<CompileTimePropertyInfo, JsonConverter> _converterOverrides = new();
-    private readonly Dictionary<CompileTimePropertyInfo, JsonConverterFactory> _converterFactoryOverrides = new();
+    private readonly Dictionary<CompileTimePropertyKey, JsonConverter> _converterOverrides = new();
+    private readonly Dictionary<CompileTimePropertyKey, JsonConverterFactory> _converterFactoryOverrides = new();
 
     /// <summary>
     /// Holds a value indicating whether extra undefined properties should be allowed.
@@ -95,8 +107,8 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
             throw new InvalidOperationException();
         }
 
-        var compProp = CompileTimePropertyInfo.GetForReflectedProperty(property);
-        if (!DtoProperties.Contains(compProp))
+        var compProp = CompileTimePropertyKey.GetForReflectedProperty(property);
+        if (DtoProperties.All(e => e != compProp))
         {
             throw new InvalidOperationException();
         }
@@ -128,8 +140,8 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
             throw new InvalidOperationException();
         }
 
-        var compProp = CompileTimePropertyInfo.GetForReflectedProperty(property);
-        if (!DtoProperties.Contains(compProp))
+        var compProp = CompileTimePropertyKey.GetForReflectedProperty(property);
+        if (DtoProperties.All(e => e != compProp))
         {
             throw new InvalidOperationException();
         }
@@ -162,8 +174,8 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
             throw new InvalidOperationException();
         }
 
-        var compProp = CompileTimePropertyInfo.GetForReflectedProperty(property);
-        if (!DtoProperties.Contains(compProp))
+        var compProp = CompileTimePropertyKey.GetForReflectedProperty(property);
+        if (DtoProperties.All(e => e != compProp))
         {
             throw new InvalidOperationException();
         }
@@ -200,8 +212,8 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
             throw new InvalidOperationException();
         }
 
-        var compProp = CompileTimePropertyInfo.GetForReflectedProperty(property);
-        if (!DtoProperties.Contains(compProp))
+        var compProp = CompileTimePropertyKey.GetForReflectedProperty(property);
+        if (DtoProperties.All(e => e != compProp))
         {
             throw new InvalidOperationException();
         }
@@ -239,8 +251,8 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
             throw new InvalidOperationException();
         }
 
-        var compProp = CompileTimePropertyInfo.GetForReflectedProperty(property);
-        if (!DtoProperties.Contains(compProp))
+        var compProp = CompileTimePropertyKey.GetForReflectedProperty(property);
+        if (DtoProperties.All(e => e != compProp))
         {
             throw new InvalidOperationException();
         }
@@ -253,7 +265,7 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
                 ? [name]
                 : [name, ..fallbacks];
 
-        _readNameOverrides.Add(property, overrides);
+        _readNameOverrides.Add(compProp, overrides);
 
         return this;
     }
@@ -407,5 +419,148 @@ public abstract class AbstractDataObjectConverter<TInterface, TImplementation> :
 
         _converterFactoryOverrides.Add(compProp, converterFactory);
         return this;
+    }
+
+    /// <inheritdoc />
+    public override bool CanConvert(Type typeToConvert)
+    {
+        return typeToConvert == typeof(TImplementation) || typeToConvert == typeof(TInterface);
+    }
+
+    /// <inheritdoc />
+    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+    {
+        var writeProperties = new List<DTOPropertyInfo>();
+        var readProperties = new List<DTOPropertyInfo>();
+
+        var properties = DtoProperties;
+        for (int i = 0; i < properties.Count; i++)
+        {
+            var property = properties[i];
+
+            var converter = GetConverter(property, options);
+            var readNames = GetReadJsonPropertyName(property, options);
+            var writeNames = GetWriteJsonPropertyName(property, options);
+            var reader = property.Reader;
+            var writer = property.Writer;
+
+            // We cache this as well since the check is somewhat complex
+            var allowsNull = property.AllowsNull;
+
+            var data = new DTOPropertyInfo
+            (
+                property.Name,
+                readNames,
+                writeNames,
+                reader,
+                writer,
+                allowsNull,
+                property.DefaultValue,
+                converter,
+                readProperties.Count
+            );
+
+            if (property.CanWrite)
+            {
+                // If a property is writable, it can be *read* from JSON.
+                readProperties.Add(data);
+            }
+
+            if ((property.CanWrite || ShouldIncludeReadOnlyProperty(property)) && !_excludeOverrides.Contains(property))
+            {
+                // Any property that is writable and not excluded due to being read-only,
+                // can be *written* to JSON.
+                writeProperties.Add(data);
+            }
+        }
+
+        if (typeToConvert == typeof(TInterface))
+        {
+            return new BoundDataObjectConverter<TInterface>
+            (
+                InterfaceFactory,
+                _allowExtraProperties,
+                writeProperties.ToArray(),
+                readProperties.ToArray()
+            );
+        }
+
+        // ReSharper disable once InvertIf
+        if (typeToConvert == typeof(TImplementation))
+        {
+            return new BoundDataObjectConverter<TImplementation>
+            (
+                Factory,
+                _allowExtraProperties,
+                writeProperties.ToArray(),
+                readProperties.ToArray()
+            );
+        }
+
+        throw new ArgumentException("This converter cannot convert the provided type.", nameof(typeToConvert));
+    }
+
+    /// <summary>
+    /// Returns whether the specified property should be included when serializing even if it is read-only.
+    /// </summary>
+    /// <param name="property">The property.</param>
+    /// <returns>Whether the property should be included even if it is read-only.</returns>
+    private bool ShouldIncludeReadOnlyProperty(CompileTimePropertyKey property)
+    {
+        return _includeReadOnlyOverrides.Contains(property);
+    }
+
+    /// <summary>
+    /// Gets the JSON property names for reading the specified property.
+    /// </summary>
+    /// <param name="dtoProperty">The property to get the names for.</param>
+    /// <param name="options">The active serializer options.</param>
+    /// <returns>An array of the supported names for this property.</returns>
+    private string[] GetReadJsonPropertyName(CompileTimePropertyKey dtoProperty, JsonSerializerOptions options)
+    {
+        return _readNameOverrides.TryGetValue(dtoProperty, out var overriddenName)
+            ? overriddenName
+            : [options.PropertyNamingPolicy?.ConvertName(dtoProperty.Name) ?? dtoProperty.Name];
+    }
+
+    /// <summary>
+    /// Gets the JSON property name for writing the specified property.
+    /// </summary>
+    /// <param name="dtoProperty">The property to get the name for.</param>
+    /// <param name="options">The active serializer options.</param>
+    /// <returns>The name to write the property with.</returns>
+    private string GetWriteJsonPropertyName(CompileTimePropertyKey dtoProperty, JsonSerializerOptions options)
+    {
+        if (_writeNameOverrides.TryGetValue(dtoProperty, out var overriddenName))
+        {
+            return overriddenName;
+        }
+
+        return options.PropertyNamingPolicy?.ConvertName(dtoProperty.Name) ?? dtoProperty.Name;
+    }
+
+    /// <summary>
+    /// Gets the property converter for a specified property.
+    /// </summary>
+    /// <param name="dtoProperty">The property to get a property converter for.</param>
+    /// <param name="options">The active serializer options.</param>
+    /// <returns>
+    /// The registered property converter, or <see langword="null"/> if no property converter was added.
+    /// </returns>
+    private JsonConverter? GetConverter(CompileTimePropertyInfo dtoProperty, JsonSerializerOptions options)
+    {
+        if (_converterOverrides.TryGetValue(dtoProperty, out var converter))
+        {
+            return converter;
+        }
+
+        if (!_converterFactoryOverrides.TryGetValue(dtoProperty, out var converterFactory))
+        {
+            return null;
+        }
+
+        var innerType = dtoProperty.UnwrappedPropertyType;
+
+        return converterFactory.CreateConverter(innerType, options);
     }
 }

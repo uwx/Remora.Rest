@@ -3,12 +3,14 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="IsExternalInit" Version="1.0.3" />
     <PackageVersion Include="JsonDocumentPath" Version="1.0.3" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0-beta1.24415.1" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0-2.final" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.1" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing" Version="1.1.1" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="8.0.0" />
+    <PackageVersion Include="Nullable" Version="1.3.1" />
     <PackageVersion Include="OneOf" Version="3.0.263" />
     <PackageVersion Include="Remora.Results" Version="7.4.1" />
     <PackageVersion Include="Remora.Results.Analyzers" Version="1.0.2" />

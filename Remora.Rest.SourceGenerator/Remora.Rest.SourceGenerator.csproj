@@ -4,11 +4,20 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <LangVersion>latest</LangVersion>
         <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);$(RootNamespace).Generated</InterceptorsPreviewNamespaces>
+        <Nullable>enable</Nullable>
         <!-- <Features>InterceptorsPreview</Features> -->
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="IsExternalInit">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
       <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+      <PackageReference Include="Nullable">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
     </ItemGroup>
 
 </Project>
